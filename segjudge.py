@@ -43,19 +43,36 @@ def parse_args():
                      epilog =
                      "Example: %s probmap.png groundtruth.png"
                      % os.path.basename(argv[0]))
-    p.add_option("--output", dest = "path_out", metavar = "PATH",
+    p.add_option("--output", 
+                 dest = "path_out", 
+                 metavar = "PATH",
                  help = "Output path to save stats to. (DEFAULT = Current "
                         "working directory).")
-    p.add_option("--noroc", action = "store_true", dest = "noroc",
+    p.add_option("--noroc",
+                 action = "store_true",
+                 default = False,
+                 dest = "noroc",
                  help = "Turns off the writing of ROC curves.")
-    p.add_option("--nopr", action = "store_true", dest = "nopr",
+    p.add_option("--nopr",
+                 action = "store_true",
+                 default = False,
+                 dest = "nopr",
                  help = "Turns off the writing of precision-recall curves.")
-    p.add_option("--noint", action = "store_true", dest = "noint",
+    p.add_option("--noint",
+                 action = "store_true",
+                 default = False,
+                 dest = "noint",
                  help = "Turns off writing of intermediate curves for all "
                         "images. Will only plot and save the summed curves.")
-    p.add_option("--noimg", action = "store_true", dest = "noimg",
+    p.add_option("--noimg",
+                 action = "store_true",
+                 default = False,
+                 dest = "noimg",
                  help = "Turns off writing of all plots and images.")
-    p.add_option("--randomline", action = "store_true", dest = "randline",
+    p.add_option("--randomline",
+                 action = "store_true",
+                 default = False,
+                 dest = "randline",
                  help = "Adds a line equivalent to making a random choice "
                         "to all ROC plots.")
     (opts, args) = p.parse_args()
@@ -202,6 +219,20 @@ if __name__ == "__main__":
               "number of ground truth images.")
     nfiles = len(pm_files)
 
+    # Create log in output path for provenance
+    fidlog = open(os.path.join(path_out, 'log.txt'), 'a+')
+    fidlog.write('Invoked from: {0}\n'.format(os.getcwd()))
+    fidlog.write('--noroc {0}\n'.format(opts.noroc))
+    fidlog.write('--nopr {0}\n'.format(opts.nopr))
+    fidlog.write('--noint {0}\n'.format(opts.noint))
+    fidlog.write('--noimg {0}\n'.format(opts.noimg))
+    fidlog.write('--randomline {0}\n'.format(opts.randline))
+    fidlog.write('Output path: {0}\n'.format(path_out))
+    fidlog.write('# files: {0}\n'.format(nfiles))
+    fidlog.write('PM files: {0}\n'.format(pm_files))
+    fidlog.write('GT files: {0}\n'.format(gt_files))
+
+    # Store header string for metrics to be written to CSV file
     csvheader = "\"Threshold\"," \
                 "\"FP\"," \
                 "\"FN\"," \
@@ -376,3 +407,5 @@ if __name__ == "__main__":
         h.close()
         os.rmdir(path_roc)
         os.rmdir(path_pr)
+
+    fidlog.close()
