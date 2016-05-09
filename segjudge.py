@@ -1,19 +1,30 @@
 #! /usr/bin/env python
 
-#
-# [1] Fawcett, T. (2006). An introduction to ROC analysis. Pattern recognition
-#     letters, 27(8), 861-874.
-# [2] Celebi, M. E., Schaefer, G., Iyatomi, H., Stoecker, W. V., Malters,
-#     J. M., & Grichnik, J. M. (2009). An improved objective evaluation
-#     measure for border detection in dermoscopy images. Skin Research and
-#     Technology, 15(4), 444-450.
-# [3] Powers, D. M. (2011). Evaluation: from precision, recall and F-measure to
-#     ROC, informedness, markedness & correlation. Journal of Machine Learning
-#     Technologies, 2(1), 37-63.
-# [4] Seyedhosseini, M., Sajjadi, M., & Tasdizen, T. (2013). Image Segmentation
-#     with Cascaded Hierarchical Models and Logistic Disjunctive Normal 
-#     Networks. Computer Vision.
-#
+"""
+Computes segmentation evaluation metrics for an input segmentation and its
+corresponding ground truth. Comparisons can be in one of four forms:
+
+    1. Single image probability map vs. single image ground truth
+    2. Single image binary segmentation vs. single image binary ground truth
+    3. Probability map stack vs. ground truth stack
+    4. Binary segmentation stack vs. binary ground truth stack
+
+References
+----------
+
+[1] Fawcett, T. (2006). An introduction to ROC analysis. Pattern recognition
+     letters, 27(8), 861-874.
+[2] Celebi, M. E., Schaefer, G., Iyatomi, H., Stoecker, W. V., Malters,
+     J. M., & Grichnik, J. M. (2009). An improved objective evaluation
+     measure for border detection in dermoscopy images. Skin Research and
+     Technology, 15(4), 444-450.
+[3] Powers, D. M. (2011). Evaluation: from precision, recall and F-measure to
+     ROC, informedness, markedness & correlation. Journal of Machine Learning
+     Technologies, 2(1), 37-63.
+[4] Seyedhosseini, M., Sajjadi, M., & Tasdizen, T. (2013). Image Segmentation
+     with Cascaded Hierarchical Models and Logistic Disjunctive Normal 
+     Networks. Computer Vision.
+"""
 
 import os
 import glob
@@ -25,6 +36,61 @@ from scipy import misc
 from optparse import OptionParser
 from subprocess import Popen, call, PIPE
 from sys import stderr, exit, argv
+
+def parse_args():
+    global p
+    p = OptionParser(usage = "%prog [options] probmap.png groundtruth.png",
+                     epilog =
+                     "Example: %s probmap.png groundtruth.png"
+                     % os.path.basename(argv[0]))
+    p.add_option("--output", dest = "path_out", metavar = "PATH",
+                 help = "Output path to save stats to. (DEFAULT = Current "
+                        "working directory).")
+    p.add_option("--noroc", action = "store_true", dest = "noroc",
+                 help = "Turns off the writing of ROC curves.")
+    p.add_option("--nopr", action = "store_true", dest = "nopr",
+                 help = "Turns off the writing of precision-recall curves.")
+    p.add_option("--noint", action = "store_true", dest = "noint",
+                 help = "Turns off writing of intermediate curves for all "
+                        "images. Will only plot and save the summed curves.")
+    p.add_option("--noimg", action = "store_true", dest = "noimg",
+                 help = "Turns off writing of all plots and images.")
+    p.add_option("--randomline", action = "store_true", dest = "randline",
+                 help = "Adds a line equivalent to making a random choice "
+                        "to all ROC plots.")
+    (opts, args) = p.parse_args()
+    pm_in, gt_in = check_args(args)
+    path_out = check_opts(opts)
+    return opts, pm_in, gt_in, path_out
+
+def check_args(args):
+    if len(args) is not 2:
+        usage('Improper number of arguments.')
+    pm_in = args[0]
+    gt_in = args[1]
+    return pm_in, gt_in
+
+def check_opts(opts):
+    # Set output path to current working directory, if not supplied
+    if not opts.path_out:
+        opts.path_out = os.getcwd()
+
+    # Check that desired output path exists
+    if not os.path.isdir(opts.path_out):
+        usage("The output path {0} does not exist".format(opts.path_out))
+
+    # Check new directory within output path, named segjudge-output, to store
+    # all output files to. If this path already exists, append a number to the
+    # end of the name.
+    path_out = os.path.join(opts.path_out, "segjudge-output")
+    if os.path.isdir(path_out):
+        outdirs = sorted(glob.glob(path_out + '-*'))
+        if not outdirs:
+            nout = 2
+        else:
+            nout = int(outdirs[-1].split('-')[-1]) + 1 
+        path_out = path_out + '-{0}'.format(nout)
+    return path_out
 
 def usage(errstr):
     print ""
@@ -96,51 +162,13 @@ def computeMetrics(FP, FN, TP, TN, thresh):
 
 
 if __name__ == "__main__":
-    p = OptionParser(usage = "%prog [options] probmap.png groundtruth.png", 
-                     epilog =
-                     "Example: %s probmap.png groundtruth.png"
-                     % os.path.basename(argv[0]))    
- 
-    p.add_option("--output", dest = "path_out", metavar = "PATH",
-                 help = "Output path to save stats to. (DEFAULT = Current "
-                        "working directory).")
 
-    p.add_option("--noroc", action = "store_true", dest = "noroc",
-                 help = "Turns off the writing of ROC curves.")
+    opts, pm_in, gt_in, path_out = parse_args()
 
-    p.add_option("--nopr", action = "store_true", dest = "nopr",
-                 help = "Turns off the writing of precision-recall curves.")
-
-    p.add_option("--noint", action = "store_true", dest = "noint",
-                 help = "Turns off writing of intermediate curves for all "
-                        "images. Will only plot and save the summed curves.")
-
-    p.add_option("--noimg", action = "store_true", dest = "noimg",
-                 help = "Turns off writing of all plots and images.")
-
-    p.add_option("--randomline", action = "store_true", dest = "randline",
-                 help = "Adds a line equivalent to making a random choice "
-                        "to all ROC plots.")
-
-    (opts, args) = p.parse_args()
-
-    # Set the arguments
-    if len(args) != 2:
-        usage("Improper number of arguments. See usage below.")
-    pm_in = args[0]
-    gt_in = args[1]
-    
-    # Set and check the output directory
-    if not opts.path_out:
-        opts.path_out = os.getcwd()
-    if not os.path.isdir(opts.path_out):
-        usage("The output path {0} does not exist".format(opts.path_out))
-    path_out = os.path.join(opts.path_out, "segstats")
-    if os.path.isdir(path_out):
-        usage("There is already a folder with the name segstats in the "
-              "output path {0}".format(opts.path_out))
+    # Create main output path
     os.makedirs(path_out)
 
+    # Create sub-directories in output path for various outputs, as needed
     path_csv = os.path.join(path_out, "csv")
     os.makedirs(path_csv)
  
